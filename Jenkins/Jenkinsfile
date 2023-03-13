@@ -520,7 +520,7 @@ pipeline {
                         agent { label "docker-build-aimet-pr-${PROC_TYPE}" }
                         environment {
                             AIMET_VARIANT="${ML_FMWORK}-${PROC_TYPE}"
-                            DOCKER_CMD='docker run --rm $([[ "$PROC_TYPE" == "gpu" ]] && echo "--gpus all") -u "$(id -u):$(id -g)" -v $PWD:$PWD -w $PWD -e AIMET_VARIANT $DOCKER_IMAGE '
+                            DOCKER_CMD='docker run --rm $([ "$PROC_TYPE" == "gpu" ] && echo "--gpus all") -u "$(id -u):$(id -g)" -v $PWD:$PWD -w $PWD -e AIMET_VARIANT $DOCKER_IMAGE '
                             DOCKER_IMAGE="aimet-dev-docker:${AIMET_VARIANT}"
                         }
                         stages {
@@ -555,9 +555,9 @@ pipeline {
                                             '&& source $PWD/venv/bin/activate ' +
                                             '&& python3 -m pip install --upgrade pip setuptools ' +
                                             '&& cmake -S . -B ./build-$AIMET_VARIANT ' +
-                                                '-DENABLE_CUDA=$([[ "$AIMET_VARIANT" =~ "gpu" ]] &&  echo 1 || echo 0) ' +
-                                                '-DENABLE_TORCH=$([[ "$AIMET_VARIANT" =~ "torch" ]] && echo 1 || echo 0) ' +
-                                                '-DENABLE_TENSORFLOW=$([[ "$AIMET_VARIANT" =~ "tf" ]] && echo 1 || echo 0) ' +
+                                                '-DENABLE_CUDA=$([ "$AIMET_VARIANT" =~ "gpu" ] &&  echo 1 || echo 0) ' +
+                                                '-DENABLE_TORCH=$([ "$AIMET_VARIANT" =~ "torch" ] && echo 1 || echo 0) ' +
+                                                '-DENABLE_TENSORFLOW=$([ "$AIMET_VARIANT" =~ "tf" ] && echo 1 || echo 0) ' +
                                             '&& cmake --build ./build-$AIMET_VARIANT --target whl_develop'
                                         sh "${env.DOCKER_CMD} bash -c '${docker_script}'"
                                     }
@@ -568,15 +568,13 @@ pipeline {
                                     script {
                                         def docker_script = 'source $PWD/venv/bin/activate ' +
                                             '&& (python3 -m pip show AimetCommon) ' +
-                                            '&& ([[ "$AIMET_VARIANT" =~ "torch" ]] && python3 -m pip show AimetTorch || true) ' +
-                                            '&& ([[ "$AIMET_VARIANT" =~ "tf" ]]    && python3 -m pip show AimetTensorflow || true) '
+                                            '&& ([ "$AIMET_VARIANT" =~ "torch" ] && python3 -m pip show AimetTorch || true) ' +
+                                            '&& ([ "$AIMET_VARIANT" =~ "tf" ]    && python3 -m pip show AimetTensorflow || true) '
                                         sh "${env.DOCKER_CMD} bash -c '${docker_script}'"
                                     }
                                 }
                             }
                             stage('Unit tests in editable mode') {
-                                //TODO We skip unit tests for GPU variants for now due to out-of-memory GPU failures
-                                when { expression { AIMET_VARIANT =~ 'cpu' } }
                                 steps {
                                     script {
                                         def docker_script = 'TORCH_HOME=build-$AIMET_VARIANT/torch_cache cmake --build ./build-$AIMET_VARIANT --target test'
