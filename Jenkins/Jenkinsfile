@@ -575,6 +575,8 @@ pipeline {
                                 }
                             }
                             stage('Unit tests in editable mode') {
+                                //TODO We skip unit tests for GPU variants for now due to out-of-memory GPU failures
+                                when { expression { AIMET_VARIANT =~ 'cpu' } }
                                 steps {
                                     script {
                                         def docker_script = 'TORCH_HOME=build-$AIMET_VARIANT/torch_cache cmake --build ./build-$AIMET_VARIANT --target test'
