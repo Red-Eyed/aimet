@@ -24,6 +24,12 @@ pipeline {
         XUNIT_XSL_FILE  = "${PROJECT_ROOT}/Jenkins/to-junit.xsl"
     }
     stages {
+        stage('Bash test') {
+            steps {
+                sh 'readlink -f $(which $(ps -o fname --no-headers -p $$))'
+                sh 'false'
+            }
+        }
         stage('Setup') {
             steps {
                 echo "*** Running SETUP stage on ${env.NODE_NAME} in workspace ${env.WORKSPACE_ROOT} ***"
