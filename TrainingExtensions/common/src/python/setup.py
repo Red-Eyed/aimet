@@ -103,6 +103,7 @@ class BuildExtensionCommand(build_ext):
                 f"-DENABLE_CUDA={'OFF' if os.environ['AIMET_CU_VER'] == 'cpu' else 'ON'}",
                 f"-DENABLE_TORCH={'OFF' if os.environ['AIMET_PT_VER'] == '' else 'ON'}",
                 f"-DENABLE_TENSORFLOW={'OFF' if os.environ['AIMET_TF_VER'] == '' else 'ON'}",
+                "-DOPENCV_ALLOCATOR_STATS_COUNTER_TYPE=int64_t"
             ]
             subprocess.run(["cmake", "-B", bld_dir, "-S",  src_dir] + cmake_args,
                 check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",

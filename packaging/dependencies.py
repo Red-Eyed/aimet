@@ -50,6 +50,7 @@ _CURRENT_MODULE = sys.modules[__name__]
 _SCRIPT_DIR = Path(__file__).parent
 
 _TORCH = {
+    "2.0.0": ["torch==2.0.0", "torchvision==0.15.1"],
     "1.9.1": ["torch==1.9.1+{cu}", "torchvision==0.10.1+{cu}"],
     "1.10.0": ["torch==1.10.0+{cu}", "torchvision==0.11.0+{cu}"],
     "1.10.1": ["torch==1.10.1+{cu}", "torchvision==0.11.2+{cu}"],
