@@ -3,7 +3,7 @@
 #
 #  @@-COPYRIGHT-START-@@
 #
-#  Copyright (c) 2019-2022, Qualcomm Innovation Center, Inc. All rights reserved.
+#  Copyright (c) 2019-2023, Qualcomm Innovation Center, Inc. All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
@@ -58,9 +58,9 @@ from aimet_torch import onnx_utils
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.ConnectedGraph)
 
-# Check trace parameter for torch jit trace
-check_trace = False
-
+# Global dictionary holding arguments to be used in ConnectedGraph's torch.jit.trace. Can be imported and modified by
+# users as needed.
+jit_trace_args = {'check_trace': False}
 
 # pylint: disable=too-many-lines
 # pylint: disable=protected-access
@@ -108,7 +108,8 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
     def __init__(self, model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]):
         """
-        Init function for connected graph
+        Init function for connected graph.
+
         :param model: Pytorch model to create connected graph from
         :param model_input: Example input to model.  Can be a single tensor or a list/tuple of input tensors
         """
@@ -139,6 +140,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         'view',
         'narrow',
         'reshape',
+        'reshape_as',
         'mean',
         'index_select',
         'slice',
@@ -152,7 +154,8 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         'copy',
         'clone',
         'index',
-        'ScalarImplicit'
+        'ScalarImplicit',
+        'transpose'
     }
 
     # Graph nodes for which which we will treat as passthrough and not represent with an Op
@@ -252,11 +255,12 @@ class ConnectedGraph(AimetCommonConnectedGraph):
     def _construct_graph(self, model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]):
         """
         Construct connected graph from model and example inputs.
+
         :param model: Pytorch model to create connected graph from
         :param model_input: Example input to model.  Can be a single tensor or a list/tuple of input tensors
         """
         module_tensor_shapes_map = ConnectedGraph._generate_module_tensor_shapes_lookup_table(model, model_input)
-        trace = torch.jit.trace(model, model_input, check_trace=check_trace)
+        trace = torch.jit.trace(model, model_input, **jit_trace_args)
         self._parse_top_level_trace(trace, model)
         self._optimize_connected_graph()
         self._transform_ops_and_products_to_connected_graph_convention()

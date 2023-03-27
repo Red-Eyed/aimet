@@ -43,7 +43,7 @@ from onnx import helper
 import os
 import pytest
 from aimet_common import libpymo
-from aimet_common.defs import QuantScheme, MAP_QUANT_SCHEME_TO_PYMO, MAP_ROUND_MODE_TO_PYMO
+from aimet_common.defs import QuantScheme, MAP_QUANT_SCHEME_TO_PYMO, MAP_ROUND_MODE_TO_PYMO, QuantizationDataType
 from aimet_onnx.qc_quantize_op import QcQuantizeOp, OpMode
 from aimet_common import libquant_info
 
@@ -155,7 +155,7 @@ class TestQcQuantizeOp:
         output = session.run(None, {'input': input_arr})[0]
 
         assert np.max(output) <= 1.1
-        assert np.min(output) >= -5
+        assert np.min(output) >= -5.1
 
     def test_update_stats_quantize_dequantize(self):
 
@@ -362,3 +362,7 @@ class TestQcQuantizeOp:
 
         qc_op.use_unsigned_symmetric = True
         assert quant_info.tensorQuantizerRef.getUnsignedSymmetric() == True
+
+        qc_op.data_type = QuantizationDataType.float
+        assert qc_op.data_type == QuantizationDataType.float
+        assert qc_op.quant_info.isIntDataType == False

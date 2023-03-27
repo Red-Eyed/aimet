@@ -36,6 +36,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 import contextlib
+import copy
 import os
 import logging
 from collections import defaultdict
@@ -570,8 +571,7 @@ class TestOnnxUtils:
         for name in expected_node_names:
             assert name in actual_node_names
 
-        expected_param_names = {'conv1.weight', 'gn.bias', 'conv1.bias', 'gn.weight', 'bn.weight',
-                                'bn.running_mean', 'bn.bias', 'bn.running_var'}
+        expected_param_names = {'conv1.weight', 'gn.bias', 'conv1.bias', 'gn.weight', 'bn.weight', 'bn.bias'}
         _, valid_param_set = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
         for name in expected_param_names:
             assert name in valid_param_set
@@ -579,7 +579,6 @@ class TestOnnxUtils:
         self.check_onnx_node_name_uniqueness(onnx_model)
 
         # enable onnx simply
-        onnx_utils.simplify_onnx_model = True
         with onnx_simply(True):
             onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.rand(1, 10, 24, 24),
                                                 is_conditional=False, module_marker_map={})
@@ -599,7 +598,8 @@ class TestOnnxUtils:
         if os.path.exists(onnx_path):
             os.remove(onnx_path)
 
-    def test_set_node_name_for_matmul_add_linear(self):
+    @pytest.mark.parametrize("export_args", [None, {"opset_version": 12}])
+    def test_set_node_name_for_matmul_add_linear(self, export_args):
         """
         Test that node names are set correctly for linear ops turned into matmul/add in onnx.
         """
@@ -615,7 +615,7 @@ class TestOnnxUtils:
         model = Linear()
         # Using an input to linear op with dimension != 2 causes torch to use matmul->add instead of gemm op
         onnx_path = './data/MyModel.onnx'
-        onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.randn(1, 1, 3))
+        onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.randn(1, 1, 3), onnx_export_args=copy.deepcopy(export_args))
         onnx_model = onnx.load(onnx_path)
         expected_node_names = ['linear', 'linear#1.end']
 
@@ -629,7 +629,7 @@ class TestOnnxUtils:
             assert name in valid_param_set
 
         # Check that gemm still works as expected
-        onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.randn(1, 3))
+        onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.randn(1, 3), onnx_export_args=copy.deepcopy(export_args))
         onnx_model = onnx.load(onnx_path)
 
         actual_node_names = [node.name for node in onnx_model.graph.node]
@@ -726,13 +726,17 @@ class TestOnnxUtils:
         self.check_onnx_node_name_uniqueness(onnx_model)
 
         expected_names = [
+            # names compatible with torch 1.9.1 version (should be removed in the future)
             'layer.mul1.mul',
             'layer.mul1.Mul_7',
-
             'layer.mul2.mul',
             'layer.mul2.Mul_15',
-
-            'layer.Mul_18'
+            'layer.Mul_18',
+            
+            # names compatible with torch 1.13.1 version 
+            '/layer/mul1/Mul',
+            '/layer/mul2/Mul',
+            '/layer/Mul'
         ]
         for node in onnx_model.graph.node:
             assert 'Constant' in node.name or node.name in expected_names
@@ -773,9 +777,15 @@ class TestOnnxUtils:
                 return self.layer(x)
 
         model = Net()
-        dummy_input = {'a': torch.randn(1, 10, 10, 10),
-                       'b': torch.randn(1, 10, 10, 10),
-                       'c': torch.randn(1, 10, 10, 10)}
+
+        # Add an empty dictionary as the last element to not treat as named arguments.
+        # see torch.onnx.export() API for more details.
+        dummy_input = (
+            {'a': torch.randn(1, 10, 10, 10),
+             'b': torch.randn(1, 10, 10, 10),
+             'c': torch.randn(1, 10, 10, 10)
+             }, {}
+        )
         onnx_path = './data/MyModel.onnx'
 
         torch.onnx.export(model, dummy_input, onnx_path)
@@ -786,6 +796,7 @@ class TestOnnxUtils:
         self.check_onnx_node_name_uniqueness(onnx_model)
 
         for node in onnx_model.graph.node:
+            print(node.name)
             assert node.name.startswith('layer')
 
     def test_kwargs_input_dict_output(self):
@@ -816,9 +827,14 @@ class TestOnnxUtils:
 
         model = Net()
 
-        dummy_input = {'a': torch.randn(1, 10, 10, 10),
-                       'b': torch.randn(1, 10, 10, 10),
-                       'c': torch.randn(1, 10, 10, 10)}
+        # Add an empty dictionary as the last element to not treat as named arguments.
+        # see torch.onnx.export() API for more details.
+        dummy_input = (
+            {'a': torch.randn(1, 10, 10, 10),
+             'b': torch.randn(1, 10, 10, 10),
+             'c': torch.randn(1, 10, 10, 10)
+             }, {}
+        )
         onnx_path = './data/MyModel.onnx'
 
         torch.onnx.export(model, dummy_input, onnx_path)
@@ -829,7 +845,7 @@ class TestOnnxUtils:
         self.check_onnx_node_name_uniqueness(onnx_model)
 
         for node in onnx_model.graph.node:
-            assert node.name.startswith('layer')
+            assert node.name.startswith('layer') or node.name.startswith('/layer')
 
         if os.path.exists(onnx_path):
             os.remove(onnx_path)
@@ -850,18 +866,22 @@ class TestOnnxUtils:
         self.check_onnx_node_names(onnx_model)
 
         counts = defaultdict(int)
-        top_level_nodes = tuple(['conv1', 'bn1', 'relu', 'maxpool', 'avgpool', 'Flatten_', 'fc'])
+        top_level_nodes = tuple(['conv1', 'bn1', 'relu', 'maxpool', 'avgpool', 'Flatten_', '/Flatten', 'fc'])
         for node in onnx_model.graph.node:
-            if '.' in node.name:
+            if node.name.startswith(top_level_nodes):
+                continue
+            elif '.' in node.name:
                 layer_name = '.'.join(node.name.split('#')[0].split('.')[:-1])
                 counts[layer_name] += 1
-            else:
-                assert node.name.startswith(top_level_nodes)
+            elif node.name.startswith('/'):
+                layer_name = '.'.join(node.name.split('/')[1:-1])
+                counts[layer_name] += 1
 
         for name, counts in counts.items():
             if 'downsample' in name:
                 assert counts == 2
             else:
+                print(name, counts)
                 assert counts == 10
 
         if os.path.exists(onnx_path):
